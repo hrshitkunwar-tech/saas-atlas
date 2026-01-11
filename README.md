@@ -1,2 +1,1 @@
-# saas-atlas
-SaaS implementation knowledge directory
+# SaaS Atlas
