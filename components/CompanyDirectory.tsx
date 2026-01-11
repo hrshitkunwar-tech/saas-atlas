@@ -79,7 +79,6 @@ export function CompanyDirectory() {
 
   const getResourceUrl = (company: Company, paths: string[]) => {
     const baseUrl = new URL(company.docs_url).origin;
-    // Try to find the most likely path
     return `${baseUrl}${paths[0]}`;
   };
 
@@ -102,7 +101,7 @@ export function CompanyDirectory() {
     }
     
     return result;
-  }, [companies, searchQuery, selectedCategory]);
+  }, [companies, searchQuery, selectedCategory, selectedContentType]);
 
   const companiesByCategory = useMemo(() => {
     const grouped: Record<string, Company[]> = {};
@@ -172,6 +171,11 @@ export function CompanyDirectory() {
               );
             })}
           </div>
+          {selectedContentType !== 'all' && (
+            <p className="text-sm text-gray-600 mt-4 p-4 bg-blue-50 rounded-lg">
+              📌 Tip: Each company has different types of resources. Click on any company card to explore their {contentTypes.find(t => t.id === selectedContentType)?.label.toLowerCase()} and other support materials.
+            </p>
+          )}
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg border p-6 mb-8">
@@ -297,8 +301,7 @@ export function CompanyDirectory() {
                   {resourceSections.map((section) => {
                     const Icon = section.icon;
                     return (
-                      
-                        <a key={section.id}
+                      <a key={section.id}
                         href={getResourceUrl(selectedCompany, section.paths)}
                         target="_blank"
                         rel="noopener noreferrer"
