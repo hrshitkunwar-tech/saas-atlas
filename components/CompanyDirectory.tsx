@@ -1,65 +1,33 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Search, ExternalLink, Globe, Loader, BookOpen, HelpCircle, Code, Wrench, FileText, Puzzle, MessageCircle, GraduationCap, Mail, ArrowRight } from 'lucide-react';
+import { Search, X, ExternalLink, BookOpen, AlertCircle, Zap, Code, Grid3x3, ChevronRight, ArrowRight, Clock, Star, Check } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Company } from '@/lib/types';
 
-const contentTypes = [
-  { id: 'all', label: 'All Resources', icon: Globe },
-  { id: 'docs', label: 'Documentation', icon: BookOpen },
-  { id: 'faq', label: 'FAQs', icon: HelpCircle },
-  { id: 'implementation', label: 'Implementation', icon: Wrench },
-  { id: 'api', label: 'API Docs', icon: Code },
-  { id: 'howto', label: 'How-To Guides', icon: FileText },
-  { id: 'integrations', label: 'Integrations', icon: Puzzle },
-];
+interface SearchResult {
+  company: Company;
+  relevance: number;
+  matchType: 'name' | 'description' | 'category';
+}
 
-const resourceSections = [
-  { 
-    id: 'knowledge', 
-    label: 'Knowledge Base', 
-    icon: BookOpen, 
-    description: 'Browse articles, guides, and documentation',
-    paths: ['/docs', '/knowledge', '/help', '/support/articles']
-  },
-  { 
-    id: 'community', 
-    label: 'Community Forum', 
-    icon: MessageCircle, 
-    description: 'Connect with other users and get help',
-    paths: ['/community', '/forum', '/discussions']
-  },
-  { 
-    id: 'academy', 
-    label: 'Academy & Training', 
-    icon: GraduationCap, 
-    description: 'Video tutorials and certification courses',
-    paths: ['/academy', '/training', '/learn', '/courses']
-  },
-  { 
-    id: 'developer', 
-    label: 'Developer Documentation', 
-    icon: Code, 
-    description: 'API reference and technical guides',
-    paths: ['/developers', '/api', '/docs/api', '/developer']
-  },
-  { 
-    id: 'support', 
-    label: 'Contact Support', 
-    icon: Mail, 
-    description: 'Get personalized help from support team',
-    paths: ['/contact', '/support/contact', '/help/contact']
-  },
+const intentCategories = [
+  { id: 'getting-started', label: 'Getting Started', icon: Zap },
+  { id: 'api', label: 'API & SDK', icon: Code },
+  { id: 'integration', label: 'Integrations', icon: Grid3x3 },
+  { id: 'troubleshooting', label: 'Troubleshooting', icon: AlertCircle },
+  { id: 'docs', label: 'Documentation', icon: BookOpen },
 ];
 
 export function CompanyDirectory() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [selectedContentType, setSelectedContentType] = useState('all');
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+  const [selectedIntent, setSelectedIntent] = useState<string>('getting-started');
+  const [showResults, setShowResults] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
 
   useEffect(() => {
     fetchCompanies();
@@ -72,270 +40,416 @@ export function CompanyDirectory() {
     setLoading(false);
   }
 
+  const performSearch = (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      setShowResults(false);
+      return;
+    }
+
+    const lowerQuery = query.toLowerCase();
+    const results: SearchResult[] = companies
+      .map(company => {
+        let relevance = 0;
+        let matchType: 'name' | 'description' | 'category' = 'name';
+
+        if (company.name.toLowerCase().includes(lowerQuery)) {
+          relevance = 100;
+          matchType = 'name';
+        } else if (company.category.toLowerCase().includes(lowerQuery)) {
+          relevance = 75;
+          matchType = 'category';
+        } else if (company.description?.toLowerCase().includes(lowerQuery)) {
+          relevance = 50;
+          matchType = 'description';
+        }
+
+        return { company, relevance, matchType };
+      })
+      .filter(r => r.relevance > 0)
+      .sort((a, b) => b.relevance - a.relevance);
+
+    setSearchResults(results);
+    setShowResults(true);
+
+    const saved = localStorage.getItem('recentSearches');
+    const recent = saved ? JSON.parse(saved) : [];
+    if (query.trim() && !recent.includes(query)) {
+      const updated = [query, ...recent].slice(0, 5);
+      localStorage.setItem('recentSearches', JSON.stringify(updated));
+    }
+  };
+
   const getLogoUrl = (company: Company) => {
     const domain = company.docs_url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0];
     return `https://logo.clearbit.com/${domain}`;
   };
 
-  const getResourceUrl = (company: Company, paths: string[]) => {
-    const baseUrl = new URL(company.docs_url).origin;
-    return `${baseUrl}${paths[0]}`;
-  };
-
-  const categories = useMemo(() => [...new Set(companies.map(c => c.category))].sort(), [companies]);
-
-  const filteredCompanies = useMemo(() => {
-    let result = companies;
-    
-    if (searchQuery.trim() !== '') {
-      const query = searchQuery.toLowerCase().trim();
-      result = result.filter(company => 
-        company.name.toLowerCase().includes(query) ||
-        company.category.toLowerCase().includes(query) ||
-        (company.description && company.description.toLowerCase().includes(query))
-      );
-    }
-    
-    if (selectedCategory !== 'all') {
-      result = result.filter(company => company.category === selectedCategory);
-    }
-    
-    return result;
-  }, [companies, searchQuery, selectedCategory, selectedContentType]);
-
-  const companiesByCategory = useMemo(() => {
-    const grouped: Record<string, Company[]> = {};
-    filteredCompanies.forEach(company => {
-      if (!grouped[company.category]) grouped[company.category] = [];
-      grouped[company.category].push(company);
-    });
-    return grouped;
-  }, [filteredCompanies]);
+  const categories = useMemo(() => [...new Set(companies.map(c => c.category))], [companies]);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
-        <Loader className="w-16 h-16 animate-spin text-blue-600" />
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-3 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading knowledge base...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
-                <Globe className="w-8 h-8 text-white" />
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50">
+      {/* Header */}
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-200/50 shadow-sm">
+        <div className="max-w-6xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-lg">
+                <Search className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">SaaS Atlas</h1>
-                <p className="text-sm text-gray-600 mt-1">Knowledge for {companies.length} platforms</p>
+                <h1 className="text-2xl font-bold text-gray-900">SaaS Atlas</h1>
+                <p className="text-xs text-gray-500">{companies.length} products • {categories.length} categories</p>
               </div>
             </div>
-            <div className="flex gap-6">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600">{companies.length}</div>
-                <div className="text-xs text-gray-600">Companies</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-indigo-600">{categories.length}</div>
-                <div className="text-xs text-gray-600">Categories</div>
-              </div>
+          </div>
+
+          {/* Search Bar */}
+          <div className="relative">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <input
+                type="text"
+                placeholder="Search anything... 'stripe webhook', 'datadog setup', 'salesforce integration'"
+                value={searchQuery}
+                onChange={(e) => performSearch(e.target.value)}
+                onFocus={() => searchQuery === '' ? setShowResults(true) : null}
+                className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base transition-all"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSearchResults([]);
+                    setShowResults(false);
+                  }}
+                  className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              )}
             </div>
+
+            {/* Search Dropdown */}
+            {showResults && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-xl z-50 max-h-96 overflow-y-auto">
+                {searchQuery.trim() === '' ? (
+                  <div className="p-4">
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-3">Try searching for:</p>
+                    <div className="space-y-2">
+                      {['stripe webhook', 'datadog setup', 'salesforce integration', 'slack api'].map((example, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => performSearch(example)}
+                          className="w-full text-left px-4 py-2 hover:bg-gray-50 rounded text-sm text-gray-700"
+                        >
+                          {example}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : searchResults.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <p className="text-gray-500">No results found for "{searchQuery}"</p>
+                  </div>
+                ) : (
+                  <div className="divide-y">
+                    {searchResults.map((result, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => {
+                          setSelectedCompany(result.company);
+                          setShowResults(false);
+                        }}
+                        className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors flex items-start gap-3"
+                      >
+                        <img
+                          src={getLogoUrl(result.company)}
+                          alt={result.company.name}
+                          className="w-8 h-8 rounded object-cover flex-shrink-0 mt-1"
+                          onError={(e) => (e.target as HTMLImageElement).style.display = 'none'}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-gray-900">{result.company.name}</p>
+                            {result.relevance === 100 && (
+                              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">Match</span>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-500 truncate">{result.company.category}</p>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0 mt-1" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">Filter by Content Type</h2>
-          <div className="grid grid-cols-7 gap-3">
-            {contentTypes.map((type) => {
-              const Icon = type.icon;
-              const isSelected = selectedContentType === type.id;
-              return (
-                <button
-                  key={type.id}
-                  onClick={() => setSelectedContentType(type.id)}
-                  className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
-                    isSelected ? 'border-blue-500 bg-blue-50 shadow-lg scale-105' : 'border-gray-200 bg-white hover:border-gray-300'
-                  }`}
-                >
-                  <Icon className={`w-6 h-6 ${isSelected ? 'text-blue-600' : 'text-gray-600'}`} />
-                  <span className={`text-xs font-medium text-center ${isSelected ? 'text-blue-700' : 'text-gray-700'}`}>
-                    {type.label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          {selectedContentType !== 'all' && (
-            <p className="text-sm text-gray-600 mt-4 p-4 bg-blue-50 rounded-lg">
-              📌 Tip: Each company has different types of resources. Click on any company card to explore their {contentTypes.find(t => t.id === selectedContentType)?.label.toLowerCase()} and other support materials.
-            </p>
-          )}
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-lg border p-6 mb-8">
-          <div className="grid grid-cols-3 gap-4">
-            <div className="col-span-2">
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="text"
-                  placeholder="Search companies by name, category, or description..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 text-lg"
-                />
-              </div>
-            </div>
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 font-medium"
-            >
-              <option value="all">All Categories</option>
-              {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-            </select>
-          </div>
-          
-          <div className="mt-4 text-sm text-gray-600">
-            {searchQuery ? (
-              <span>Found <strong className="text-blue-600">{filteredCompanies.length}</strong> results for "{searchQuery}"</span>
-            ) : (
-              <span>Showing <strong className="text-blue-600">{filteredCompanies.length}</strong> of {companies.length} companies</span>
-            )}
-            {searchQuery && filteredCompanies.length === 0 && (
-              <button 
-                onClick={() => setSearchQuery('')}
-                className="ml-2 text-blue-600 hover:underline"
-              >
-                Clear search
-              </button>
-            )}
-          </div>
-        </div>
-
-        {filteredCompanies.length === 0 ? (
-          <div className="bg-white rounded-2xl border shadow-lg p-16 text-center">
-            <Globe className="w-20 h-20 mx-auto text-gray-300 mb-4" />
-            <h3 className="text-2xl font-bold text-gray-900 mb-2">No companies found</h3>
-            <p className="text-gray-600 mb-4">
-              {searchQuery ? `No results for "${searchQuery}"` : 'Try adjusting your filters'}
-            </p>
-            {searchQuery && (
-              <button 
-                onClick={() => setSearchQuery('')}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Clear Search
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-8">
-            {Object.entries(companiesByCategory).map(([category, categoryCompanies]) => (
-              <div key={category} className="bg-white rounded-2xl border shadow-lg overflow-hidden">
-                <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-4">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-bold text-white">{category}</h2>
-                    <span className="px-4 py-1 bg-white/20 text-white rounded-full text-sm font-semibold">{categoryCompanies.length}</span>
+      {/* Main Content */}
+      <main className="max-w-6xl mx-auto px-4 py-8">
+        {!selectedCompany ? (
+          <>
+            {/* Empty State / Inspiration */}
+            {searchQuery === '' && searchResults.length === 0 && (
+              <div className="space-y-12">
+                <div className="text-center py-12">
+                  <h2 className="text-3xl font-bold text-gray-900 mb-4">Find support for any SaaS tool</h2>
+                  <p className="text-gray-600 max-w-2xl mx-auto mb-8">
+                    Search by product name, feature, error message, or task. Instant access to official documentation, guides, and integrations.
+                  </p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {['Stripe API setup', 'Datadog monitoring', 'HubSpot integration', 'Slack webhook'].map((example, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => performSearch(example)}
+                        className="px-4 py-2 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 text-sm text-gray-700 transition-all"
+                      >
+                        {example}
+                      </button>
+                    ))}
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-4 p-6">
-                  {categoryCompanies.map(company => (
-                    <div key={company.id} className="border-2 border-gray-200 rounded-xl p-5 hover:border-blue-400 hover:shadow-xl transition-all cursor-pointer" onClick={() => setSelectedCompany(company)}>
-                      <div className="flex items-start gap-4 mb-3">
-                        <div className="w-12 h-12 rounded-lg bg-gray-100 border">
-                          <img src={getLogoUrl(company)} alt={company.name} className="w-full h-full object-contain p-1" onError={(e) => (e.target as HTMLImageElement).style.display = 'none'} />
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="font-bold text-gray-900 text-lg">{company.name}</h3>
-                          <p className="text-xs text-gray-500 mt-1">{company.category}</p>
-                        </div>
-                      </div>
-                      {company.description && <p className="text-sm text-gray-600 mb-4 line-clamp-2">{company.description}</p>}
-                      <button className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:underline">
-                        <ArrowRight className="w-4 h-4" />View Support Resources
+
+                {/* Top Categories */}
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-6">Browse by Category</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {categories.slice(0, 6).map(cat => {
+                      const count = companies.filter(c => c.category === cat).length;
+                      return (
+                        <button
+                          key={cat}
+                          onClick={() => performSearch(cat)}
+                          className="p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all text-left"
+                        >
+                          <p className="font-semibold text-gray-900">{cat}</p>
+                          <p className="text-sm text-gray-500 mt-1">{count} products</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Popular Integrations */}
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-6">Popular Integrations</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {['Salesforce', 'HubSpot', 'Slack', 'Zapier', 'Make', 'Integromat'].map((integration, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => performSearch(integration)}
+                        className="p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-300 transition-all text-center"
+                      >
+                        <p className="font-medium text-gray-900">{integration}</p>
                       </button>
-                    </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Search Results */}
+            {searchResults.length > 0 && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    Results for "<span className="text-blue-600">{searchQuery}</span>"
+                  </h2>
+                  <p className="text-gray-600">{searchResults.length} found</p>
+                </div>
+
+                <div className="grid gap-4">
+                  {searchResults.map((result, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setSelectedCompany(result.company)}
+                      className="p-6 bg-white border border-gray-200 rounded-lg hover:border-blue-400 hover:shadow-md transition-all text-left"
+                    >
+                      <div className="flex items-start gap-4">
+                        <img
+                          src={getLogoUrl(result.company)}
+                          alt={result.company.name}
+                          className="w-12 h-12 rounded object-cover flex-shrink-0"
+                          onError={(e) => (e.target as HTMLImageElement).style.display = 'none'}
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h3 className="text-lg font-bold text-gray-900">{result.company.name}</h3>
+                            <span className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded">{result.company.category}</span>
+                          </div>
+                          {result.company.description && (
+                            <p className="text-gray-600 text-sm mb-3">{result.company.description}</p>
+                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.open(result.company.docs_url, '_blank');
+                            }}
+                            className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                          >
+                            View Documentation <ExternalLink className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0 mt-1" />
+                      </div>
+                    </button>
                   ))}
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            )}
+          </>
+        ) : (
+          /* Product Knowledge Hub */
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Main Content */}
+            <div className="lg:col-span-2">
+              {/* Product Header */}
+              <div className="mb-8">
+                <button
+                  onClick={() => setSelectedCompany(null)}
+                  className="text-blue-600 hover:text-blue-700 font-medium mb-6 flex items-center gap-2"
+                >
+                  ← Back to search
+                </button>
 
-      {selectedCompany && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 flex items-center justify-center p-4" onClick={() => setSelectedCompany(null)}>
-          <div className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-purple-600 text-white p-8 rounded-t-3xl">
-              <div className="flex justify-between items-start">
-                <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-xl bg-white/20 backdrop-blur-sm p-2">
-                    <img src={getLogoUrl(selectedCompany)} alt={selectedCompany.name} className="w-full h-full object-contain" onError={(e) => (e.target as HTMLImageElement).style.display = 'none'} />
-                  </div>
-                  <div>
-                    <h2 className="text-3xl font-bold mb-1">{selectedCompany.name}</h2>
-                    <p className="text-blue-100 text-lg">{selectedCompany.category}</p>
+                <div className="flex items-start gap-4 mb-8">
+                  <img
+                    src={getLogoUrl(selectedCompany)}
+                    alt={selectedCompany.name}
+                    className="w-16 h-16 rounded-lg object-cover"
+                    onError={(e) => (e.target as HTMLImageElement).style.display = 'none'}
+                  />
+                  <div className="flex-1">
+                    <h1 className="text-4xl font-bold text-gray-900">{selectedCompany.name}</h1>
+                    <p className="text-gray-600 mt-2">{selectedCompany.category}</p>
+                    {selectedCompany.description && (
+                      <p className="text-gray-700 mt-4">{selectedCompany.description}</p>
+                    )}
+                    
+                      href={selectedCompany.docs_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                    >
+                      Official Docs <ExternalLink className="w-4 h-4" />
+                    </a>
                   </div>
                 </div>
-                <button onClick={() => setSelectedCompany(null)} className="text-white/80 hover:text-white text-4xl leading-none">×</button>
+
+                <div className="border-t border-gray-200 pt-6">
+                  <p className="text-sm text-gray-600 font-semibold uppercase mb-4">What are you trying to do?</p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {intentCategories.map(intent => {
+                      const Icon = intent.icon;
+                      const isSelected = selectedIntent === intent.id;
+                      return (
+                        <button
+                          key={intent.id}
+                          onClick={() => setSelectedIntent(intent.id)}
+                          className={`p-3 rounded-lg border-2 transition-all flex items-center gap-2 ${
+                            isSelected
+                              ? 'border-blue-500 bg-blue-50'
+                              : 'border-gray-200 bg-white hover:border-gray-300'
+                          }`}
+                        >
+                          <Icon className={`w-5 h-5 ${isSelected ? 'text-blue-600' : 'text-gray-600'}`} />
+                          <span className={`text-sm font-medium ${isSelected ? 'text-blue-700' : 'text-gray-700'}`}>
+                            {intent.label}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Content Sections */}
+              <div className="space-y-8 bg-white rounded-lg p-8 border border-gray-200">
+                {[
+                  { title: '📚 Getting Started', desc: 'Setup guides and first steps' },
+                  { title: '⚙️ API & SDK', desc: 'Reference documentation and code examples' },
+                  { title: '🔗 Integrations', desc: 'Connect with other tools' },
+                  { title: '🐛 Troubleshooting', desc: 'Common errors and solutions' },
+                ].map((section, idx) => (
+                  <div key={idx} className="border-b border-gray-200 pb-8 last:border-0">
+                    <h3 className="text-xl font-bold text-gray-900 mb-3">{section.title}</h3>
+                    <p className="text-gray-600 text-sm mb-4">{section.desc}</p>
+                    
+                      href={selectedCompany.docs_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center gap-1"
+                    >
+                      View on official docs <ArrowRight className="w-4 h-4" />
+                    </a>
+                  </div>
+                ))}
               </div>
             </div>
-            
-            <div className="p-8">
-              {selectedCompany.description && (
-                <div className="mb-8 p-5 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border border-blue-200">
-                  <p className="text-gray-700 text-lg leading-relaxed">{selectedCompany.description}</p>
-                </div>
-              )}
 
-              <div className="mb-8">
-                <h3 className="text-2xl font-bold text-gray-900 mb-6">Support & Learning Resources</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {resourceSections.map((section) => {
-                    const Icon = section.icon;
-                    return (
-                      <a key={section.id}
-                        href={getResourceUrl(selectedCompany, section.paths)}
+            {/* Sidebar */}
+            <div className="lg:col-span-1">
+              <div className="sticky top-24 space-y-6">
+                {/* Quick Info */}
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <h4 className="font-bold text-gray-900 mb-4">Quick Info</h4>
+                  <div className="space-y-3 text-sm">
+                    <div>
+                      <p className="text-gray-500">Category</p>
+                      <p className="font-medium text-gray-900">{selectedCompany.category}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Documentation</p>
+                      
+                        href={selectedCompany.docs_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="group p-6 border-2 border-gray-200 rounded-2xl hover:border-blue-400 hover:shadow-xl transition-all bg-white"
+                        className="text-blue-600 hover:text-blue-700 font-medium break-all text-xs"
                       >
-                        <div className="flex items-start gap-4">
-                          <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-100 transition-colors">
-                            <Icon className="w-6 h-6 text-blue-600" />
-                          </div>
-                          <div className="flex-1">
-                            <h4 className="font-bold text-gray-900 text-lg mb-2 group-hover:text-blue-600 transition-colors flex items-center gap-2">
-                              {section.label}
-                              <ExternalLink className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </h4>
-                            <p className="text-sm text-gray-600 leading-relaxed">{section.description}</p>
-                          </div>
-                        </div>
+                        {selectedCompany.docs_url}
                       </a>
-                    );
-                  })}
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-              <div className="p-6 bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl border border-gray-200">
-                <h3 className="text-sm font-bold text-gray-700 mb-3 uppercase tracking-wide">Main Documentation Site</h3>
-                <a href={selectedCompany.docs_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 text-blue-600 hover:text-blue-800 font-medium group">
-                  <ExternalLink className="w-5 h-5 flex-shrink-0" />
-                  <span className="break-all group-hover:underline">{selectedCompany.docs_url}</span>
-                </a>
+                {/* Related Products */}
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <h4 className="font-bold text-gray-900 mb-4">Related Products</h4>
+                  <div className="space-y-2">
+                    {companies
+                      .filter(c => c.category === selectedCompany.category && c.id !== selectedCompany.id)
+                      .slice(0, 5)
+                      .map(c => (
+                        <button
+                          key={c.id}
+                          onClick={() => setSelectedCompany(c)}
+                          className="w-full text-left p-2 hover:bg-blue-50 rounded text-sm text-gray-700 hover:text-blue-600 transition-colors"
+                        >
+                          {c.name}
+                        </button>
+                      ))}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </main>
     </div>
   );
 }
