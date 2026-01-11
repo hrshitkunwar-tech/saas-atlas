@@ -17,6 +17,7 @@
     "lint": "next lint"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.18",
     "@types/node": "^20.10.0",
     "@types/react": "19.2.8",
     "@types/react-dom": "^19.2.1",
