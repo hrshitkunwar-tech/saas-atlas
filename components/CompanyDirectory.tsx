@@ -53,7 +53,14 @@ export function CompanyDirectory() {
             <button onClick={() => setSelectedCompany(null)} className="text-blue-600 mb-4">Back</button>
             <h2 className="text-3xl font-bold mb-2">{selectedCompany.name}</h2>
             <p className="text-gray-600 mb-4">{selectedCompany.category}</p>
-            <a href={selectedCompany.docs_url} target="_blank" className="px-4 py-2 bg-blue-600 text-white rounded">View Docs</a>
+            <a
+              href={selectedCompany.docs_url}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="px-4 py-2 bg-blue-600 text-white rounded"
+            >
+              View Docs
+            </a>
           </div>
         ) : (
           <div>
