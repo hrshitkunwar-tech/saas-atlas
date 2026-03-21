@@ -10,7 +10,7 @@ Searchable directory of 200+ SaaS products with direct links to official documen
 
 You know the tool you need. Finding its docs shouldn't take five Google results. SaaS Atlas is a single search interface across the SaaS ecosystem — search by product name or category, land directly on the official documentation.
 
-It's also the wedge product for [Navigator](https://github.com/hrshitkunwar-tech/navigator). Navigator needs to know what SaaS tools exist and where their documentation lives. SaaS Atlas is that index, built as a public product.
+It's also part of the broader Navigator ecosystem. Navigator needs to know what SaaS tools exist and where their documentation lives. SaaS Atlas is that index, built as a public product.
 
 ---
 
