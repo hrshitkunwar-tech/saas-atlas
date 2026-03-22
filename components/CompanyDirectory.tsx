@@ -8,15 +8,41 @@ import { Company } from '@/lib/types';
 export function CompanyDirectory() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Company[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
 
   useEffect(() => {
     const fetch = async () => {
-      const { data } = await supabase.from('companies').select('*').order('name');
-      setCompanies(data || []);
-      setLoading(false);
+      if (!supabase) {
+        setError('Supabase is not configured. Add a valid NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to load the directory.');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase.from('companies').select('*').order('name');
+        if (error) {
+          setError(error.message);
+          setCompanies([]);
+          setLoading(false);
+          return;
+        }
+
+        setError('');
+        setCompanies(data || []);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to load companies.';
+        if (message.toLowerCase().includes('failed to fetch')) {
+          setError('Could not reach the configured Supabase project. Check the project URL, DNS, and network access.');
+        } else {
+          setError(message);
+        }
+        setCompanies([]);
+      } finally {
+        setLoading(false);
+      }
     };
     fetch();
   }, []);
@@ -48,6 +74,11 @@ export function CompanyDirectory() {
         </div>
       </header>
       <main className="max-w-6xl mx-auto px-4 py-8">
+        {error ? (
+          <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {error}
+          </div>
+        ) : null}
         {selectedCompany ? (
           <div>
             <button onClick={() => setSelectedCompany(null)} className="text-blue-600 mb-4">Back</button>
@@ -73,6 +104,11 @@ export function CompanyDirectory() {
                 </button>
               ))}
             </div>
+            {!companies.length && !error ? (
+              <div className="rounded-lg border border-dashed bg-white p-8 text-center text-sm text-gray-600">
+                No companies are available yet.
+              </div>
+            ) : null}
           </div>
         )}
       </main>
