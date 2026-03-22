@@ -2,8 +2,6 @@
 
 Searchable directory of 200+ SaaS products with direct links to official documentation.
 
-**Live:** [mindlyft.in](https://mindlyft.in)
-
 ---
 
 ## What It Is
@@ -24,7 +22,6 @@ It's also part of the broader [Navigator](https://github.com/hrshitkunwar-tech/n
 | Styling | Tailwind CSS |
 | Icons | Lucide React |
 | Deployment | Vercel |
-| Domain | mindlyft.in |
 
 ---
 
@@ -104,6 +101,5 @@ This repo is a public GitHub template. Fork it to build a category-specific soft
 |---|---|---|
 | [navigator](https://github.com/hrshitkunwar-tech/navigator) | Thesis | 5-layer architecture for AI execution on software interfaces |
 | [VisionGuide](https://github.com/hrshitkunwar-tech/VisionGuide) | Perception | Screenshot → Gemini vision → real-time UI guidance |
-| [zoneguide](https://github.com/hrshitkunwar-tech/zoneguide) | Recording | DOM interaction capture and replay, zero dependencies |
 | [job](https://github.com/hrshitkunwar-tech/job) | Applied | CareerAgent: score → tailor → apply, local-first |
 | [saas-atlas](https://github.com/hrshitkunwar-tech/saas-atlas) | Data | Searchable directory of 200+ SaaS tools |
