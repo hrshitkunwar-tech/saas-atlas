@@ -1,7 +1,7 @@
 {
   "name": "saas-atlas",
   "version": "1.0.0",
-  "description": "A modern SaaS application",
+  "description": "Searchable directory of 200+ SaaS tools with direct documentation links",
   "private": true,
   "dependencies": {
     "@supabase/supabase-js": "^2.90.1",
